@@ -84,7 +84,13 @@
 import { CORE_STABILITY_MIN } from './constants';
 import { CORE_EVIDENCE_RULE_VERSION, coherentLevelOf, evidenceRank } from './coreEvidence';
 import { BTTS_PROFILE_RULE_VERSION } from './bttsProfile';
-import { coreStrategySpecOf, specNullReasonOf, type QuickStrategySpec } from './coreStrategy';
+import {
+  CUSTOM_BTTS_MIN_RATE,
+  coreStrategySpecOf,
+  isCustomBttsStrategy,
+  specNullReasonOf,
+  type QuickStrategySpec } from
+'./coreStrategy';
 import { DECISION_THRESHOLDS, SECONDARY_MARKET_THRESHOLDS } from './decision';
 import {
   coreCardMarkets,
