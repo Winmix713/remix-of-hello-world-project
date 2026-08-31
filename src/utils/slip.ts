@@ -1436,6 +1436,9 @@ analyses: readonly FixtureAnalysis[],
 markets?: SlipMarketPreferences | null,
 strategy?: CoreStrategySettings | null)
 : SlipDraft {
+  // „Saját” mód: a legelső ág, hogy egyetlen kapu-számítás se induljon el.
+  if (isCustomBttsStrategy(strategy)) return buildCustomBttsDraft(analyses);
+
   const allPatterns = rankedPatterns(analyses);
   const spec = coreStrategySpecOf(strategy);
   const reason = specNullReasonOf(strategy);
