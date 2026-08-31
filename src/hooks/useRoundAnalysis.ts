@@ -6,6 +6,7 @@ import { analyzeRound, type LeagueContext } from '../utils/roundAnalysis';
 import { buildSlipDraft } from '../utils/slip';
 import type { CoreStrategySettings, SlipMarketPreferences } from '../types/winmix';
 import { readCheckpoint } from '../utils/checkpointStore';
+import { STORAGE_KEY } from '../utils/constants';
 import { LEAGUES } from '../data/leagues';
 import type {
   FixtureAnalysis,
@@ -32,6 +33,68 @@ export function roundSignature(round: FixtureRound): string {
   join('|');
 }
 
+/**
+ * PONT 5 — az elemzés eredménye lapozáskor ne vesszen el.
+ *
+ * SESSION scope szándékosan: az elemzés derivált gyorsítótár, nem igazságforrás.
+ * Nem élheti túl a fülbezárást, és a visszatöltés csak akkor érvényes, ha a
+ * mentett ujjlenyomat bitre egyezik az aktuális fordulóval — különben olyan
+ * párosításokra hivatkozó kártyák jelennének meg, amelyek már nem léteznek.
+ * Semmi nem dob: blokkolt/teli/hibás session store esetén sima memória-mód.
+ */
+const ROUND_ANALYSIS_STORE_VERSION = 1;
+const ROUND_ANALYSIS_SESSION_KEY = `${STORAGE_KEY}::round-analysis`;
+
+interface RoundAnalysisEnvelope {
+  storeVersion: number;
+  signature: string;
+  analyses: FixtureAnalysis[];
+}
+
+function readStoredAnalysis(): { signature: string;analyses: FixtureAnalysis[]; } | null {
+  try {
+    const raw = window.sessionStorage.getItem(ROUND_ANALYSIS_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as RoundAnalysisEnvelope;
+    if (
+    !parsed ||
+    parsed.storeVersion !== ROUND_ANALYSIS_STORE_VERSION ||
+    typeof parsed.signature !== 'string' ||
+    !Array.isArray(parsed.analyses) ||
+    parsed.analyses.length === 0)
+    {
+      return null;
+    }
+    return { signature: parsed.signature, analyses: parsed.analyses };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredAnalysis(
+signature: string | null,
+analyses: FixtureAnalysis[])
+{
+  try {
+    if (!signature || analyses.length === 0) {
+      window.sessionStorage.removeItem(ROUND_ANALYSIS_SESSION_KEY);
+      return;
+    }
+    const envelope: RoundAnalysisEnvelope = {
+      storeVersion: ROUND_ANALYSIS_STORE_VERSION,
+      signature,
+      analyses
+    };
+    window.sessionStorage.setItem(
+      ROUND_ANALYSIS_SESSION_KEY,
+      JSON.stringify(envelope)
+    );
+  } catch {
+    // Session store elérhetetlen vagy tele — a perzisztálás legjobb-igyekezet.
+  }
+}
+
+
 export function useRoundAnalysis(
 markets?: SlipMarketPreferences | null,
 strategy?: CoreStrategySettings | null)
@@ -45,14 +108,28 @@ strategy?: CoreStrategySettings | null)
     patternWeights
   } = useWinmix();
 
-  const [analyses, setAnalyses] = useState<FixtureAnalysis[]>([]);
+  // Induló visszatöltés a session storeból (lásd a modul fejét). Lazy
+  // inicializálás: az első render már a mentett eredménnyel jön fel, így nincs
+  // üres-flash és nincs fölösleges újraelemzés lapozás után.
+  const restoredRef = useRef<{signature: string;analyses: FixtureAnalysis[];} | null | undefined>(
+    undefined
+  );
+  if (restoredRef.current === undefined) restoredRef.current = readStoredAnalysis();
+  const restored = restoredRef.current;
+
+  const [analyses, setAnalyses] = useState<FixtureAnalysis[]>(
+    () => restored?.analyses ?? []
+  );
   const [draft, setDraft] = useState<SlipDraft | null>(null);
   const [analyzedSignature, setAnalyzedSignature] = useState<string | null>(
-    null
+    () => restored?.signature ?? null
   );
-  const [status, setStatus] = useState<AnalysisStatus>('idle');
+  const [status, setStatus] = useState<AnalysisStatus>(
+    () => restored ? 'done' : 'idle'
+  );
   const [progress, setProgress] = useState<AnalysisProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+
 
   const abortRef = useRef<AbortController | null>(null);
   const contextCache = useRef(new Map<League, LeagueContext>());
@@ -99,6 +176,28 @@ strategy?: CoreStrategySettings | null)
     setAnalyzedSignature(null);
     setProgress(null);
   }, [analyses.length, analyzedSignature, draft, ready.length, running]);
+
+  // A visszatöltött eredmény érvényessége: ha a forduló időközben (másik
+  // munkamenet-lapon vagy szerkesztéssel) megváltozott, a mentett elemzés nem
+  // létező párosításokra hivatkozna — eldobjuk. Csak mountnál fut.
+  useEffect(() => {
+    if (!restored) return;
+    if (restored.signature === signature) return;
+    setAnalyses([]);
+    setDraft(null);
+    setAnalyzedSignature(null);
+    setStatus('idle');
+    writeStoredAnalysis(null, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Perzisztálás: minden érvényes eredmény azonnal a session storeba kerül,
+  // a törlés (kiürített forduló, elavult visszatöltés) pedig ki is takarítja.
+  useEffect(() => {
+    writeStoredAnalysis(analyzedSignature, analyses);
+  }, [analyses, analyzedSignature]);
+
+
 
   /**
    * C1 — a FORRÁS bekötése. A pipeline a bejárás végén ligánként kipublikálja
