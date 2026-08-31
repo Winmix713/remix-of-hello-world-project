@@ -92,6 +92,18 @@ export const QUICK_STRATEGY: Record<QuickCoreStrategy, QuickStrategySpec> = {
     allowRelaxed: false,
     profileVeto: false
   },
+  custom_btts: {
+    id: 'custom_btts',
+    label: 'Saját',
+    short: 'Saját · BTTS > 50%',
+    description:
+    'Csak BTTS Igen 50% felett. BTTS százalék szerint rangsorolva. Semmilyen ' +
+    'minőségi kapu nem fut le.',
+    codes: ['BTTS'],
+    slots: 6,
+    allowRelaxed: false,
+    profileVeto: false
+  },
   custom: {
     id: 'custom',
     label: 'Haladó — egyedi piac-készlet',
@@ -112,6 +124,7 @@ QUICK_STRATEGY.btts_profile_safe,
 QUICK_STRATEGY.btts_raw_h2h,
 QUICK_STRATEGY.over25,
 QUICK_STRATEGY.safety_trend,
+QUICK_STRATEGY.custom_btts,
 QUICK_STRATEGY.custom];
 
 
