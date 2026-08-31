@@ -32,6 +32,68 @@ export function roundSignature(round: FixtureRound): string {
   join('|');
 }
 
+/**
+ * PONT 5 — az elemzés eredménye lapozáskor ne vesszen el.
+ *
+ * SESSION scope szándékosan: az elemzés derivált gyorsítótár, nem igazságforrás.
+ * Nem élheti túl a fülbezárást, és a visszatöltés csak akkor érvényes, ha a
+ * mentett ujjlenyomat bitre egyezik az aktuális fordulóval — különben olyan
+ * párosításokra hivatkozó kártyák jelennének meg, amelyek már nem léteznek.
+ * Semmi nem dob: blokkolt/teli/hibás session store esetén sima memória-mód.
+ */
+const ROUND_ANALYSIS_STORE_VERSION = 1;
+const ROUND_ANALYSIS_SESSION_KEY = `${STORAGE_KEY}::round-analysis`;
+
+interface RoundAnalysisEnvelope {
+  storeVersion: number;
+  signature: string;
+  analyses: FixtureAnalysis[];
+}
+
+function readStoredAnalysis(): { signature: string;analyses: FixtureAnalysis[]; } | null {
+  try {
+    const raw = window.sessionStorage.getItem(ROUND_ANALYSIS_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as RoundAnalysisEnvelope;
+    if (
+    !parsed ||
+    parsed.storeVersion !== ROUND_ANALYSIS_STORE_VERSION ||
+    typeof parsed.signature !== 'string' ||
+    !Array.isArray(parsed.analyses) ||
+    parsed.analyses.length === 0)
+    {
+      return null;
+    }
+    return { signature: parsed.signature, analyses: parsed.analyses };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredAnalysis(
+signature: string | null,
+analyses: FixtureAnalysis[])
+{
+  try {
+    if (!signature || analyses.length === 0) {
+      window.sessionStorage.removeItem(ROUND_ANALYSIS_SESSION_KEY);
+      return;
+    }
+    const envelope: RoundAnalysisEnvelope = {
+      storeVersion: ROUND_ANALYSIS_STORE_VERSION,
+      signature,
+      analyses
+    };
+    window.sessionStorage.setItem(
+      ROUND_ANALYSIS_SESSION_KEY,
+      JSON.stringify(envelope)
+    );
+  } catch {
+    // Session store elérhetetlen vagy tele — a perzisztálás legjobb-igyekezet.
+  }
+}
+
+
 export function useRoundAnalysis(
 markets?: SlipMarketPreferences | null,
 strategy?: CoreStrategySettings | null)
