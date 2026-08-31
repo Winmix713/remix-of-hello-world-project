@@ -805,6 +805,12 @@ export interface SlipSlot {
   risk: BttsBlowoutRiskAssessment | null;
   shadowVeto: boolean;
   coreTier: CoreTier | null;
+  /**
+   * „Saját” (custom_btts) mód: a sor mögött SEMMILYEN kapu, kalibráció,
+   * evidencia vagy kockázat-értékelés nem futott le, ezért a kártya nem
+   * jeleníthet meg ilyen minősítést — az félrevezető lenne.
+   */
+  plain?: boolean;
 }
 
 export interface SlipDraft {
