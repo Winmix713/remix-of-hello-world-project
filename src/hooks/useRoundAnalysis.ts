@@ -177,6 +177,28 @@ strategy?: CoreStrategySettings | null)
     setProgress(null);
   }, [analyses.length, analyzedSignature, draft, ready.length, running]);
 
+  // A visszatöltött eredmény érvényessége: ha a forduló időközben (másik
+  // munkamenet-lapon vagy szerkesztéssel) megváltozott, a mentett elemzés nem
+  // létező párosításokra hivatkozna — eldobjuk. Csak mountnál fut.
+  useEffect(() => {
+    if (!restored) return;
+    if (restored.signature === signature) return;
+    setAnalyses([]);
+    setDraft(null);
+    setAnalyzedSignature(null);
+    setStatus('idle');
+    writeStoredAnalysis(null, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Perzisztálás: minden érvényes eredmény azonnal a session storeba kerül,
+  // a törlés (kiürített forduló, elavult visszatöltés) pedig ki is takarítja.
+  useEffect(() => {
+    writeStoredAnalysis(analyzedSignature, analyses);
+  }, [analyses, analyzedSignature]);
+
+
+
   /**
    * C1 — a FORRÁS bekötése. A pipeline a bejárás végén ligánként kipublikálja
    * az illesztett modellt a `calibration[league].modelFit`-be (`m1Fit`,
