@@ -92,6 +92,18 @@ export const QUICK_STRATEGY: Record<QuickCoreStrategy, QuickStrategySpec> = {
     allowRelaxed: false,
     profileVeto: false
   },
+  custom_btts: {
+    id: 'custom_btts',
+    label: 'Saját',
+    short: 'Saját · BTTS > 50%',
+    description:
+    'Csak BTTS Igen 50% felett. BTTS százalék szerint rangsorolva. Semmilyen ' +
+    'minőségi kapu nem fut le.',
+    codes: ['BTTS'],
+    slots: 6,
+    allowRelaxed: false,
+    profileVeto: false
+  },
   custom: {
     id: 'custom',
     label: 'Haladó — egyedi piac-készlet',
@@ -112,6 +124,7 @@ QUICK_STRATEGY.btts_profile_safe,
 QUICK_STRATEGY.btts_raw_h2h,
 QUICK_STRATEGY.over25,
 QUICK_STRATEGY.safety_trend,
+QUICK_STRATEGY.custom_btts,
 QUICK_STRATEGY.custom];
 
 
@@ -162,11 +175,27 @@ export function sanitizeCoreStrategy(value: unknown): CoreStrategySettings {
   };
 }
 
+/**
+ * „Saját” (custom_btts) — a mód, amely SEMMILYEN core kaput nem használ.
+ *
+ * A szelvényépítő ezt a módot a legelső lépésben lekezeli, ezért a
+ * `coreStrategySpecOf` szándékosan `null`-t ad rá: így egyetlen kapu-, kalibrációs
+ * vagy evidencia-számító útvonal sem indul el.
+ */
+export const CUSTOM_BTTS_MIN_RATE = 0.5;
+
+export function isCustomBttsStrategy(
+settings: CoreStrategySettings | null | undefined)
+: boolean {
+  return settings?.quickStrategy === 'custom_btts';
+}
+
 /** The spec that actually drives Core selection, or null in custom mode. */
 export function coreStrategySpecOf(
 settings: CoreStrategySettings | null | undefined)
 : QuickStrategySpec | null {
   if (!settings || settings.mode !== 'quick') return null;
+  if (isCustomBttsStrategy(settings)) return null;
   const spec = QUICK_STRATEGY[settings.quickStrategy];
   return spec && spec.codes.length > 0 ? spec : null;
 }

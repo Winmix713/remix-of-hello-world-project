@@ -84,7 +84,13 @@
 import { CORE_STABILITY_MIN } from './constants';
 import { CORE_EVIDENCE_RULE_VERSION, coherentLevelOf, evidenceRank } from './coreEvidence';
 import { BTTS_PROFILE_RULE_VERSION } from './bttsProfile';
-import { coreStrategySpecOf, specNullReasonOf, type QuickStrategySpec } from './coreStrategy';
+import {
+  CUSTOM_BTTS_MIN_RATE,
+  coreStrategySpecOf,
+  isCustomBttsStrategy,
+  specNullReasonOf,
+  type QuickStrategySpec } from
+'./coreStrategy';
 import { DECISION_THRESHOLDS, SECONDARY_MARKET_THRESHOLDS } from './decision';
 import {
   coreCardMarkets,
@@ -799,6 +805,12 @@ export interface SlipSlot {
   risk: BttsBlowoutRiskAssessment | null;
   shadowVeto: boolean;
   coreTier: CoreTier | null;
+  /**
+   * „Saját” (custom_btts) mód: a sor mögött SEMMILYEN kapu, kalibráció,
+   * evidencia vagy kockázat-értékelés nem futott le, ezért a kártya nem
+   * jeleníthet meg ilyen minősítést — az félrevezető lenne.
+   */
+  plain?: boolean;
 }
 
 export interface SlipDraft {
@@ -1328,12 +1340,105 @@ strategy: CoreStrategySettings | null)
   };
 }
 
+/* -------------------------------------------------------------------------- *
+ * „SAJÁT” (custom_btts) — a szándékosan kapu nélküli mód
+ * -------------------------------------------------------------------------- *
+ * Ez az útvonal TELJESEN elkülönül a fenti core logikától. Nem hív kapu-,
+ * kalibrációs-, evidencia-, kvadráns-, kiütés-profil- vagy tartalék-függvényt.
+ * Egyetlen szabálya van: a beállított mérkőzések BTTS Igen százaléka legyen
+ * SZIGORÚAN 50% felett, és a hat kártya ebből a csökkenő rangsorból töltődjön.
+ * -------------------------------------------------------------------------- */
+
+/** A kártyán is látható BTTS Igen arány (0..1) — a nyers, nem kerekített érték. */
+export function bttsYesRateOf(pattern: PatternHit): number {
+  const value = pattern.goalStats?.bttsPct;
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * Mérkőzésenként EGY BTTS Igen jelölt, 50% felett, arány szerint csökkenően.
+ * Holtverseny esetén a beállított mérkőzés-sorrend, majd a rekord-azonosító dönt
+ * — így ugyanaz a bemenet mindig ugyanazt a kártya-sorrendet adja.
+ */
+export function customBttsCandidates(analyses: readonly FixtureAnalysis[]): PatternHit[] {
+  const picked: Array<{pattern: PatternHit;order: number;rate: number;}> = [];
+
+  analyses.forEach((analysis, order) => {
+    const bttsRows = analysis.patterns.filter((pattern) => pattern.code === 'BTTS');
+    if (bttsRows.length === 0) return;
+    // A `goal_market` rekord a közvetlen H2H BTTS arányt hordozza — ezt mutatja a
+    // kártya is; csak ha nincs ilyen, akkor esünk vissza az első BTTS rekordra.
+    const pattern =
+    bttsRows.find((row) => row.type === 'goal_market') ??
+    bttsRows.slice().sort((a, b) => a.id.localeCompare(b.id))[0];
+    const rate = bttsYesRateOf(pattern);
+    if (!(rate > CUSTOM_BTTS_MIN_RATE)) return;
+    picked.push({ pattern, order, rate });
+  });
+
+  return picked.
+  sort((a, b) => b.rate - a.rate || a.order - b.order || a.pattern.id.localeCompare(b.pattern.id)).
+  map((entry) => entry.pattern);
+}
+
+function customBttsSlot(
+role: ActiveSlipRole,
+pattern: PatternHit | null,
+rank: number)
+: SlipSlot {
+  const base = ROLE_SPEC[role].title.split(' — ')[0];
+  if (!pattern) {
+    return {
+      ...emptySlot(role, 'Nincs 50% felett álló BTTS Igen jelölt a beállított mérkőzések között.'),
+      title: `${base} — Saját`,
+      families: 'BTTS Igen · 50% felett',
+      plain: true
+    };
+  }
+  return {
+    role,
+    pattern,
+    title: `${base} — #${rank} BTTS jelölt · ${(bttsYesRateOf(pattern) * 100).toFixed(1)}%`,
+    families: 'BTTS Igen · 50% felett',
+    reason: null,
+    blocked: [],
+    relaxed: false,
+    failed: [],
+    risk: null,
+    shadowVeto: false,
+    coreTier: null,
+    plain: true
+  };
+}
+
+function buildCustomBttsDraft(analyses: readonly FixtureAnalysis[]): SlipDraft {
+  const ordered = customBttsCandidates(analyses);
+  const slots = ROLE_ORDER.map((role, index) =>
+  customBttsSlot(role, ordered[index] ?? null, index + 1)
+  );
+
+  return {
+    slots,
+    strategy: null,
+    trace: null,
+    configError: null,
+    notes: [
+    `Saját mód: ${ordered.length} beállított mérkőzés BTTS Igen aránya haladja meg az 50%-ot. ` +
+    'A hat kártya kizárólag ebből a csökkenő rangsorból telik meg — minőségi kapu, ' +
+    'kalibráció, kockázati veto és tartalék nélkül. Ami nem áll össze, üresen marad.']
+
+  };
+}
+
 /** Build the whole 3+3 draft from a finished round analysis. */
 export function buildSlipDraft(
 analyses: readonly FixtureAnalysis[],
 markets?: SlipMarketPreferences | null,
 strategy?: CoreStrategySettings | null)
 : SlipDraft {
+  // „Saját” mód: a legelső ág, hogy egyetlen kapu-számítás se induljon el.
+  if (isCustomBttsStrategy(strategy)) return buildCustomBttsDraft(analyses);
+
   const allPatterns = rankedPatterns(analyses);
   const spec = coreStrategySpecOf(strategy);
   const reason = specNullReasonOf(strategy);
@@ -1398,6 +1503,23 @@ allPatterns: readonly PatternHit[],
 markets: SlipMarketPreferences | null,
 strategy: CoreStrategySettings | null)
 : PatternHit[] {
+  // „Saját” mód: minden kártya ugyanabból a kapu nélküli, 50% feletti BTTS
+  // rangsorból cserél — joker oldalon is.
+  if (isCustomBttsStrategy(strategy)) {
+    const seen = new Set<string>();
+    return allPatterns.
+    filter((pattern) => pattern.code === 'BTTS' && bttsYesRateOf(pattern) > CUSTOM_BTTS_MIN_RATE).
+    filter((pattern) => {
+      if (seen.has(pattern.fixtureId)) return false;
+      seen.add(pattern.fixtureId);
+      return true;
+    }).
+    sort(
+      (a, b) =>
+      bttsYesRateOf(b) - bttsYesRateOf(a) || a.id.localeCompare(b.id)
+    );
+  }
+
   if (ROLE_SPEC[role].kind === 'joker') return jokerPool(role, allPatterns, markets);
 
   const spec = coreStrategySpecOf(strategy);

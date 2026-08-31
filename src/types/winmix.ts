@@ -526,6 +526,13 @@ export type QuickCoreStrategy =
 'btts_raw_h2h' |
 'over25' |
 'safety_trend' |
+/**
+ * „Saját” — szándékosan kapu nélküli mód: kizárólag a beállított mérkőzések
+ * 50% FELETTI BTTS Igen jelöltjei, BTTS százalék szerint csökkenő sorrendben,
+ * a hat kártyára (3 core + 3 joker). Semmilyen kapu, kalibráció, evidencia,
+ * kvadráns, veto vagy tartalék logika nem fut le rá.
+ */
+'custom_btts' |
 'custom';
 
 /**
