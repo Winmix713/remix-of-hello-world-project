@@ -1503,6 +1503,23 @@ allPatterns: readonly PatternHit[],
 markets: SlipMarketPreferences | null,
 strategy: CoreStrategySettings | null)
 : PatternHit[] {
+  // „Saját” mód: minden kártya ugyanabból a kapu nélküli, 50% feletti BTTS
+  // rangsorból cserél — joker oldalon is.
+  if (isCustomBttsStrategy(strategy)) {
+    const seen = new Set<string>();
+    return allPatterns.
+    filter((pattern) => pattern.code === 'BTTS' && bttsYesRateOf(pattern) > CUSTOM_BTTS_MIN_RATE).
+    filter((pattern) => {
+      if (seen.has(pattern.fixtureId)) return false;
+      seen.add(pattern.fixtureId);
+      return true;
+    }).
+    sort(
+      (a, b) =>
+      bttsYesRateOf(b) - bttsYesRateOf(a) || a.id.localeCompare(b.id)
+    );
+  }
+
   if (ROLE_SPEC[role].kind === 'joker') return jokerPool(role, allPatterns, markets);
 
   const spec = coreStrategySpecOf(strategy);
