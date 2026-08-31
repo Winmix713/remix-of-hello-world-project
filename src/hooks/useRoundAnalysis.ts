@@ -108,14 +108,28 @@ strategy?: CoreStrategySettings | null)
     patternWeights
   } = useWinmix();
 
-  const [analyses, setAnalyses] = useState<FixtureAnalysis[]>([]);
+  // Induló visszatöltés a session storeból (lásd a modul fejét). Lazy
+  // inicializálás: az első render már a mentett eredménnyel jön fel, így nincs
+  // üres-flash és nincs fölösleges újraelemzés lapozás után.
+  const restoredRef = useRef<{signature: string;analyses: FixtureAnalysis[];} | null | undefined>(
+    undefined
+  );
+  if (restoredRef.current === undefined) restoredRef.current = readStoredAnalysis();
+  const restored = restoredRef.current;
+
+  const [analyses, setAnalyses] = useState<FixtureAnalysis[]>(
+    () => restored?.analyses ?? []
+  );
   const [draft, setDraft] = useState<SlipDraft | null>(null);
   const [analyzedSignature, setAnalyzedSignature] = useState<string | null>(
-    null
+    () => restored?.signature ?? null
   );
-  const [status, setStatus] = useState<AnalysisStatus>('idle');
+  const [status, setStatus] = useState<AnalysisStatus>(
+    () => restored ? 'done' : 'idle'
+  );
   const [progress, setProgress] = useState<AnalysisProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+
 
   const abortRef = useRef<AbortController | null>(null);
   const contextCache = useRef(new Map<League, LeagueContext>());
