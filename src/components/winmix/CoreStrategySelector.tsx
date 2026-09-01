@@ -67,8 +67,10 @@ export function CoreStrategySelector({
   onChange
 }: CoreStrategySelectorProps) {
   const spec = QUICK_STRATEGY[value.quickStrategy];
+  const isCustomBtts = value.quickStrategy === 'custom_btts';
   const isCustom = value.mode === 'custom' || value.quickStrategy === 'custom';
   const vetoCopy = VETO_MODE_COPY[value.vetoMode];
+
 
   const selectStrategy = (id: QuickCoreStrategy) =>
   onChange({
