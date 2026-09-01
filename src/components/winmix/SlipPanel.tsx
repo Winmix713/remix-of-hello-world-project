@@ -51,6 +51,7 @@ function SlotCard({ slot, onSwap }: {slot: SlipSlot;onSwap: () => void;}) {
         risk={slot.risk ?? null}
         shadowVeto={slot.shadowVeto ?? false}
         coreTier={slot.coreTier ?? null}
+        plain={slot.plain ?? false}
         eyebrow={ROLE_INDEX[slot.role]}
         onSwap={onSwap} />
       

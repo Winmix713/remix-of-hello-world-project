@@ -49,6 +49,11 @@ interface RecommendationCardProps {
    * on any line that is not on a core card.
    */
   coreTier?: CoreTier | null;
+  /**
+   * SAJÁT (CUSTOM) MODE — plain card: no gate/evidence/tier/profile semantics
+   * apply, so every quality indicator that would imply them is suppressed.
+   */
+  plain?: boolean;
   eyebrow: string;
   onSwap: () => void;
 }
@@ -136,6 +141,7 @@ export function RecommendationCard({
   risk = null,
   shadowVeto = false,
   coreTier = null,
+  plain = false,
   eyebrow,
   onSwap
 }: RecommendationCardProps) {
@@ -172,17 +178,17 @@ export function RecommendationCard({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          {pattern && !isJoker && coreTier ?
+          {pattern && !plain && !isJoker && coreTier ?
           <CoreTierBadge tier={coreTier} confidence={coreConfidenceOf(pattern)} /> :
           null}
-          {pattern && !isJoker ?
+          {pattern && !plain && !isJoker ?
           <CoreEvidenceBadge
             level={evidenceLevelOf(pattern)}
             snapshot={pattern.coreEvidence ?? null}
             withCoverage={evidenceLevelOf(pattern) === 'conditional'} /> :
 
           null}
-          {pattern && risk ?
+          {pattern && !plain && risk ?
           <span
             title={PROFILE_COPY[risk.profile].detail}
             className={`inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-[8px] font-bold uppercase tracking-label ${
@@ -196,7 +202,7 @@ export function RecommendationCard({
               {PROFILE_COPY[risk.profile].label}
             </span> :
           null}
-          {pattern && relaxed ?
+          {pattern && !plain && relaxed ?
           <span
             title={reason ?? undefined}
             className="inline-flex items-center gap-1 rounded-full border border-chart-4/35 bg-chart-4/10 px-2 py-0.5 font-mono text-[8px] font-bold uppercase tracking-label text-chart-4">
@@ -312,7 +318,7 @@ export function RecommendationCard({
             {/* CORE TIERING — a Secondary line must state, on the card itself,
                that it is a higher-risk selection tier and why it is here. It
                must never read as an equivalent of an actionable line. */}
-            {coreTier === 'secondary' ?
+            {!plain && coreTier === 'secondary' ?
           <p className="flex items-start gap-2 rounded-xl border border-chart-4/35 bg-chart-4/10 px-3 py-2 text-[10px] leading-relaxed text-chart-4">
                 <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden={true} />
                 <span>
