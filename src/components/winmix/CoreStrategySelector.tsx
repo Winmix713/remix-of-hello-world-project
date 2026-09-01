@@ -123,7 +123,14 @@ export function CoreStrategySelector({
           </p> :
         null}
 
-        {isCustom ?
+        {isCustomBtts ?
+        <p className="rounded-md border border-border bg-background/60 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+            Saját mód: kizárólag a beállított mérkőzések BTTS Igen értéke dönt, 50%
+            felett, csökkenő sorrendben. Nincs kapu, nincs kalibráció, nincs
+            kiütés-szűrő és nincs tartalék-szabály — ezért a szokásos szűrő-számlálók
+            itt nem értelmezhetők.
+          </p> :
+        isCustom ?
         <p className="rounded-md border border-border bg-background/60 px-3 py-2 text-[11px] text-muted-foreground">
             Egyedi módban a lenti „Haladó / egyedi core beállítás” panel dönt: a
             három core kártya a saját piac-készletéből töltődik fel, a megszokott
@@ -160,7 +167,7 @@ export function CoreStrategySelector({
           </dl>
         }
 
-        {spec.profileVeto ?
+        {spec.profileVeto && !isCustomBtts ?
         <div className="flex flex-col gap-2 rounded-md border border-border bg-background/60 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-label text-muted-foreground">
@@ -231,7 +238,7 @@ export function CoreStrategySelector({
           </div> :
         null}
 
-        {readout ?
+        {readout && !isCustomBtts ?
         <p className="font-mono text-[10px] leading-relaxed text-muted-foreground">
             Szabályverzió {readout.ruleVersion} · bázis (A) {readout.baseline.length} sor ·
             profil-biztos (B) {readout.experiment.length} sor · a szelvényen a{' '}
